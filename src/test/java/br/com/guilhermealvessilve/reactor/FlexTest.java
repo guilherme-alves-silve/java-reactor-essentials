@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.publisher.BaseSubscriber;
+import reactor.core.publisher.ConnectableFlux;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
@@ -221,6 +222,56 @@ public class FlexTest {
                     .expectNext(1L)
                     .thenCancel()
                     .verify();
+    }
+
+    @Test
+    void shouldConsumeHotPublisher() throws InterruptedException {
+        ConnectableFlux<Integer> publisher = Flux.range(1, 10)
+                .delayElements(Duration.ofMillis(100))
+                .publish();
+
+        publisher.connect();
+
+        Thread.sleep(300L);
+
+        publisher.subscribe(i -> log.info("Subscriber 1: {}", i));
+
+        Thread.sleep(200L);
+
+        publisher.subscribe(i -> log.info("Subscriber 2: {}", i));
+
+        Thread.sleep(2000L);
+    }
+
+    @Test
+    void shouldConsumeHotPublisherUsingStepVerifier() throws InterruptedException {
+        ConnectableFlux<Integer> publisher = Flux.range(1, 10)
+                .log()
+                .delayElements(Duration.ofMillis(100))
+                .publish();
+
+        StepVerifier.create(publisher)
+                .then(publisher::connect)
+                .expectNext(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+                .expectComplete()
+                .verify();
+    }
+
+    @Test
+    void shouldConsumeHotPublisherWithMinOf2Subscribers() {
+
+        final int minSubscribers = 2;
+        Flux<Integer> autoConnect = Flux.range(1, 5)
+                .log()
+                .delayElements(Duration.ofMillis(50L))
+                .publish()
+                .autoConnect(minSubscribers);
+
+        StepVerifier.create(autoConnect)
+                .then(autoConnect::subscribe)
+                .expectNext(1, 2, 3, 4, 5)
+                .expectComplete()
+                .verify();
     }
 
     private Flux<Long> createInterval() {
