@@ -1,5 +1,9 @@
 package br.com.guilhermealvessilve.reactor;
 
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
@@ -11,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -302,5 +307,98 @@ public class OperatorsTest {
                 .expectNext("c", "d")
                 .expectError()
                 .verify();
+    }
+
+    @Test
+    void shouldFlattenTheMap() {
+
+        Function<String, Flux<String>> functorFindByName = (value) -> ("a".equals(value))
+                ? Flux.just("name a1", "name a2")
+                : Flux.just("name b1", "name b2");
+
+        Flux<String> flux = Flux.just("a", "b")
+                .flatMap(functorFindByName);
+
+        StepVerifier.create(flux)
+                .expectNext("name a1", "name a2", "name b1", "name b2")
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldFlattenTheMapButHasDelay() {
+
+        Function<String, Flux<String>> functorFindByName = (value) -> ("a".equals(value))
+                ? Flux.just("name a1", "name a2").delayElements(Duration.ofMillis(100))
+                : Flux.just("name b1", "name b2");
+
+        Flux<String> flux = Flux.just("a", "b")
+                .flatMap(functorFindByName);
+
+        StepVerifier.create(flux)
+                .expectNext("name b1", "name b2", "name a1", "name a2")
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldFlattenTheMapThatHasDelayButMaintainSequence() {
+
+        Function<String, Flux<String>> functorFindByName = (value) -> ("a".equals(value))
+                ? Flux.just("name a1", "name a2").delayElements(Duration.ofMillis(100))
+                : Flux.just("name b1", "name b2");
+
+        Flux<String> flux = Flux.just("a", "b")
+                .flatMapSequential(functorFindByName);
+
+        StepVerifier.create(flux)
+                .expectNext("name a1", "name a2", "name b1", "name b2")
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldZip() {
+
+        Flux<String> titleFlux = Flux.just("Hacksaw Ridge", "Saint Seiya: A Lenda dos Defensores de Atena");
+        Flux<String> studioFlux = Flux.just("Fox Studios Australia", "Toei Animation");
+        Flux<Integer> minutesFlux = Flux.just(139, 75);
+
+        Flux<Movie> movieFlux = Flux.zip(titleFlux, studioFlux, minutesFlux)
+                .flatMap(tuple -> Mono.just(new Movie(tuple.getT1(), tuple.getT2(), tuple.getT3())));
+
+        StepVerifier.create(movieFlux)
+                .expectSubscription()
+                .expectNext(
+                        new Movie("Hacksaw Ridge", "Fox Studios Australia", 139),
+                        new Movie("Saint Seiya: A Lenda dos Defensores de Atena", "Toei Animation", 75)
+                )
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldZipWith() {
+
+        Flux<String> titleFlux = Flux.just("Hacksaw Ridge", "Saint Seiya: A Lenda dos Defensores de Atena");
+        Flux<String> studioFlux = Flux.just("Fox Studios Australia", "Toei Animation");
+
+        Flux<Movie> movieFlux = titleFlux.zipWith(studioFlux)
+                .flatMap(tuple -> Mono.just(new Movie(tuple.getT1(), tuple.getT2(), null)));
+
+        StepVerifier.create(movieFlux)
+                .expectSubscription()
+                .expectNext(
+                        new Movie("Hacksaw Ridge", "Fox Studios Australia", null),
+                        new Movie("Saint Seiya: A Lenda dos Defensores de Atena", "Toei Animation", null)
+                )
+                .verifyComplete();
+    }
+
+    @Getter
+    @ToString
+    @EqualsAndHashCode
+    @RequiredArgsConstructor
+    private static class Movie {
+
+        private final String title;
+        private final String studio;
+        private final Integer min;
     }
 }

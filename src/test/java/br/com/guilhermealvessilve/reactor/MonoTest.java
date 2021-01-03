@@ -9,7 +9,6 @@ import reactor.test.StepVerifier;
 @Slf4j
 public class MonoTest {
 
-
     @Test
     void shouldMonoExpectStringValue() {
 
